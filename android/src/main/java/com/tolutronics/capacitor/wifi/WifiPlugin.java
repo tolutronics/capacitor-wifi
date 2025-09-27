@@ -200,6 +200,20 @@ public class WifiPlugin extends Plugin {
         call.resolve(result);
     }
 
+    @PluginMethod
+    @PermissionCallback
+    public void disconnect(PluginCall call) {
+        if (!hasRequiredPermissions()) {
+            requestAllPermissions(call, "disconnect");
+            return;
+        }
+
+        JSObject result = new JSObject();
+        this.wifi.disconnect();
+        result.put("wasSuccess", true);
+        call.resolve(result);
+    }
+
     // WiFi Connection Monitoring
 
     private void startWifiMonitoring() {

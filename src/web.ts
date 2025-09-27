@@ -65,6 +65,15 @@ export class WifiWeb extends WebPlugin implements WifiPlugin {
     );
   }
 
+  async disconnect(): Promise<void> {
+    console.warn(
+      'WiFi operations are not supported in web browsers. This plugin only works on native iOS/Android platforms.',
+    );
+    throw this.unavailable(
+      'WiFi operations are not available in web browsers. Please run on iOS or Android.',
+    );
+  }
+
   async disconnectAndForget(): Promise<void> {
     console.warn(
       'WiFi operations are not supported in web browsers. This plugin only works on native iOS/Android platforms.',

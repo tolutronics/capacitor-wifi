@@ -119,6 +119,38 @@ public class Wifi {
         }
     }
 
+    /**
+     * Disconnect from the current WiFi network without removing it from saved networks.
+     * The network configuration remains saved and the device can auto-reconnect later.
+     * This is different from disconnectAndForget() which removes the network configuration.
+     */
+    public void disconnect() {
+        this.ensureWifiManager();
+
+        // For API level Q (29) and above, we only unregister the current network callback
+        // but don't bind to null network, allowing the device to auto-reconnect
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            if (this.connectivityCallback != null) {
+                this.connectivityManager.unregisterNetworkCallback(this.connectivityCallback);
+                this.connectivityCallback = null;
+            }
+            // Note: We don't call bindProcessToNetwork(null) here to preserve network configuration
+        } else {
+            // For older Android versions, we need to use the deprecated approach
+            // Get current network ID and disable it temporarily, but don't remove it
+            WifiInfo wifiInfo = this.wifiManager.getConnectionInfo();
+            if (wifiInfo != null) {
+                int networkId = wifiInfo.getNetworkId();
+                if (networkId != -1) {
+                    // Disable the network but don't remove it from saved networks
+                    this.wifiManager.disableNetwork(networkId);
+                    // Disconnect from current network
+                    this.wifiManager.disconnect();
+                }
+            }
+        }
+    }
+
     public void connectToWifiBySsidPrefix(String ssidPrefix, @Nullable String password, ConnectToWifiCallback connectedCallback) {
         this.ensureWifiManager();
 

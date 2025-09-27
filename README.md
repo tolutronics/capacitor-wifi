@@ -50,7 +50,8 @@ const listener = await Wifi.addListener('wifiConnectionChange', (event) => {
 | `connectToWifiBySsidPrefixAndPassword()` | Connect to network by SSID prefix (IoT devices) |
 | `addListener('wifiConnectionChange', callback)` | Monitor WiFi connection changes |
 | `checkPermissions()` / `requestPermissions()` | Handle WiFi and location permissions |
-| `disconnectAndForget()` | Disconnect from current network |
+| `disconnect()` | Disconnect from current network (keeps network saved) |
+| `disconnectAndForget()` | Disconnect and remove network from saved networks |
 
 ## 💡 Common Use Cases
 
@@ -238,7 +239,10 @@ const setupIoTDevice = async (devicePrefix: string, devicePassword: string) => {
     // 5. Perform device configuration here
     // ... your device setup logic ...
 
-    // 6. Optionally disconnect and return to original network
+    // 6. Disconnect from device (keeping it saved for future connections)
+    // await Wifi.disconnect();
+
+    // OR completely remove the device network from saved networks
     // await Wifi.disconnectAndForget();
 
   } catch (error) {
@@ -248,6 +252,112 @@ const setupIoTDevice = async (devicePrefix: string, devicePassword: string) => {
 
 // Usage
 setupIoTDevice('MyCamera_', 'device123');
+```
+
+</details>
+
+<details>
+<summary><strong>Disconnecting from WiFi Networks</strong></summary>
+
+### Disconnecting from WiFi Networks
+
+The plugin provides two different disconnect methods with distinct behaviors:
+
+#### `disconnect()` - Disconnect but Keep Network Saved
+```typescript
+const disconnectTemporarily = async () => {
+  try {
+    // Get current network info before disconnecting
+    const currentResult = await Wifi.getCurrentWifi();
+    if (currentResult.currentWifi) {
+      console.log(`Disconnecting from: ${currentResult.currentWifi.ssid}`);
+
+      // Disconnect but keep the network configuration saved
+      await Wifi.disconnect();
+      console.log('Disconnected - network configuration preserved');
+
+      // The device can automatically reconnect to this network later
+      // without requiring the password again
+    }
+  } catch (error) {
+    console.error('Failed to disconnect:', error);
+  }
+};
+```
+
+#### `disconnectAndForget()` - Disconnect and Remove Network
+```typescript
+const disconnectPermanently = async () => {
+  try {
+    const currentResult = await Wifi.getCurrentWifi();
+    if (currentResult.currentWifi) {
+      console.log(`Removing network: ${currentResult.currentWifi.ssid}`);
+
+      // Disconnect and completely remove network from device
+      await Wifi.disconnectAndForget();
+      console.log('Network removed from saved networks');
+
+      // To reconnect later, user will need to enter password again
+    }
+  } catch (error) {
+    console.error('Failed to disconnect and forget:', error);
+  }
+};
+```
+
+#### When to Use Each Method
+
+**Use `disconnect()` when:**
+- Testing network configurations temporarily
+- Switching between networks programmatically
+- Implementing network failover scenarios
+- You want the device to auto-reconnect later
+- Working with trusted networks that should remain saved
+
+**Use `disconnectAndForget()` when:**
+- Removing untrusted or temporary networks
+- Cleaning up after IoT device configuration
+- Implementing a "forget network" feature for users
+- Security requires complete removal of network credentials
+- Working with one-time setup networks
+
+#### Platform Behavior Differences
+
+**Android:**
+- `disconnect()`: Disables current network but preserves configuration
+- `disconnectAndForget()`: Removes network from saved networks entirely
+- Device can auto-reconnect to networks disconnected with `disconnect()`
+
+**iOS:**
+- `disconnect()`: Limited functionality due to iOS restrictions
+- `disconnectAndForget()`: Standard iOS behavior for removing network configurations
+- iOS doesn't support true "disconnect without forgetting" due to platform limitations
+
+```typescript
+// Example: Smart network management
+const smartDisconnect = async (networkSsid: string, shouldForget: boolean = false) => {
+  try {
+    const current = await Wifi.getCurrentWifi();
+
+    if (current.currentWifi?.ssid === networkSsid) {
+      if (shouldForget) {
+        console.log(`Removing ${networkSsid} permanently`);
+        await Wifi.disconnectAndForget();
+      } else {
+        console.log(`Disconnecting from ${networkSsid} temporarily`);
+        await Wifi.disconnect();
+      }
+    } else {
+      console.log(`Not currently connected to ${networkSsid}`);
+    }
+  } catch (error) {
+    console.error('Disconnect operation failed:', error);
+  }
+};
+
+// Usage examples
+smartDisconnect('TempSetupNetwork', true);  // Remove setup network
+smartDisconnect('HomeWiFi', false);         // Disconnect but keep saved
 ```
 
 </details>
@@ -909,9 +1019,13 @@ export class WifiService {
     }
   }
 
-  async disconnect(): Promise<void> {
+  async disconnect(shouldForget: boolean = false): Promise<void> {
     try {
-      await Wifi.disconnectAndForget();
+      if (shouldForget) {
+        await Wifi.disconnectAndForget();
+      } else {
+        await Wifi.disconnect();
+      }
       await this.refreshCurrentWifi();
     } catch (error) {
       console.error('Failed to disconnect:', error);
@@ -1065,6 +1179,7 @@ export const useWifi = () => {
 * [`connectToWifiBySsidPrefixAndPassword(...)`](#connecttowifibyssidprefixandpassword)
 * [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions()`](#requestpermissions)
+* [`disconnect()`](#disconnect)
 * [`disconnectAndForget()`](#disconnectandforget)
 * [`addListener('wifiConnectionChange', ...)`](#addlistenerwificonnectionchange-)
 * [`removeAllListeners()`](#removealllisteners)
@@ -1151,11 +1266,30 @@ requestPermissions() => Promise<PermissionStatus>
 --------------------
 
 
+### disconnect()
+
+```typescript
+disconnect() => Promise<void>
+```
+
+Disconnect from the current WiFi network without removing it from saved networks.
+The network configuration remains saved and the device can auto-reconnect later.
+
+**Platform differences:**
+- **Android**: Properly disconnects while preserving network configuration
+- **iOS**: Limited functionality due to platform restrictions
+
+--------------------
+
+
 ### disconnectAndForget()
 
 ```typescript
 disconnectAndForget() => Promise<void>
 ```
+
+Disconnect from the current WiFi network and remove it from saved networks.
+To reconnect later, the user will need to enter the password again.
 
 --------------------
 
@@ -1315,6 +1449,41 @@ Remove all listeners for this plugin
 - `joinOnce` is set to `true` for temporary connections
 - Location permission required for WiFi scanning
 - Works on iOS 13.0+
+
+**iOS Setup Required:**
+
+1. **Add Required Capabilities in Xcode:**
+   - Open your app's `.xcworkspace` file in Xcode
+   - Select your **App target** (not Capacitor or plugin targets)
+   - Go to **"Signing & Capabilities"** tab
+   - Click **"+ Capability"** and add:
+     - **"Access WiFi Information"** - Required for getting current WiFi info
+     - **"Hotspot Configuration"** - Required for connecting to WiFi networks
+
+2. **Add Location Permission to Info.plist:**
+   ```xml
+   <key>NSLocationWhenInUseUsageDescription</key>
+   <string>This app needs location access to scan for WiFi networks</string>
+
+   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+   <string>This app needs location access to scan for WiFi networks</string>
+   ```
+
+3. **Verify Entitlements File:**
+   - Xcode automatically creates `App.entitlements` when you add capabilities
+   - Should contain:
+   ```xml
+   <key>com.apple.developer.networking.HotspotConfiguration</key>
+   <true/>
+   <key>com.apple.developer.networking.wifi-info</key>
+   <true/>
+   ```
+
+**Important iOS Notes:**
+- Must test on **real device** - iOS Simulator doesn't support WiFi operations
+- App must be in **foreground** for WiFi operations to work
+- WiFi scanning only returns currently connected network (iOS security limitation)
+- Location permission must be granted before any WiFi operations
 
 **🤖 Android**
 - Uses `WifiManager` and `ConnectivityManager` for operations

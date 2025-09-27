@@ -90,6 +90,13 @@ export interface WifiPlugin {
   disconnectAndForget(): Promise<void>;
 
   /**
+   * Disconnect from the current WiFi network without removing it from saved networks.
+   * The network configuration remains saved and the device can auto-reconnect later.
+   * @returns A promise that resolves when the disconnection is complete
+   */
+  disconnect(): Promise<void>;
+
+  /**
    * Listen for WiFi connection state changes
    * @param eventName The event name to listen for
    * @param listenerFunc The function to call when the event occurs
