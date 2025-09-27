@@ -62,6 +62,9 @@ const listener = await Wifi.addListener('wifiConnectionChange', (event) => {
 
 ## 📖 Detailed Examples
 
+<details>
+<summary><strong>Basic Setup</strong></summary>
+
 ### Basic Setup
 
 ```typescript
@@ -91,6 +94,11 @@ const checkWifiPermissions = async () => {
 };
 ```
 
+</details>
+
+<details>
+<summary><strong>Scanning for WiFi Networks</strong></summary>
+
 ### Scanning for WiFi Networks
 
 ```typescript
@@ -114,6 +122,11 @@ const scanForNetworks = async () => {
   }
 };
 ```
+
+</details>
+
+<details>
+<summary><strong>Connecting to WiFi Networks</strong></summary>
 
 ### Connecting to WiFi Networks
 
@@ -151,6 +164,11 @@ const connectToIoTDevice = async (devicePrefix: string, password: string) => {
 };
 ```
 
+</details>
+
+<details>
+<summary><strong>Getting Current WiFi Information</strong></summary>
+
 ### Getting Current WiFi Information
 
 ```typescript
@@ -172,6 +190,11 @@ const getCurrentNetwork = async () => {
   }
 };
 ```
+
+</details>
+
+<details>
+<summary><strong>Complete IoT Setup Flow</strong></summary>
 
 ### Complete IoT Setup Flow
 
@@ -226,6 +249,11 @@ const setupIoTDevice = async (devicePrefix: string, devicePassword: string) => {
 // Usage
 setupIoTDevice('MyCamera_', 'device123');
 ```
+
+</details>
+
+<details>
+<summary><strong>WiFi Connection Event Monitoring</strong></summary>
 
 ### WiFi Connection Event Monitoring
 
@@ -298,6 +326,11 @@ startWifiMonitoring();
 // Remember to stop monitoring when the component/app is destroyed
 // stopWifiMonitoring();
 ```
+
+</details>
+
+<details>
+<summary><strong>React Hook with Event Monitoring</strong></summary>
 
 ### React Hook with Event Monitoring
 
@@ -403,6 +436,11 @@ const WiFiStatusComponent = () => {
 };
 ```
 
+</details>
+
+<details>
+<summary><strong>IoT Device Monitoring Example</strong></summary>
+
 ### IoT Device Monitoring Example
 
 Monitor connection status when working with IoT devices to handle reconnection scenarios:
@@ -452,6 +490,521 @@ const configureDevice = async () => {
 };
 ```
 
+</details>
+
+<details>
+<summary><strong>Angular Component Example</strong></summary>
+
+### Angular Component Example
+
+```typescript
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Wifi } from '@tolutronics/capacitor-wifi';
+import { PluginListenerHandle } from '@capacitor/core';
+
+@Component({
+  selector: 'app-wifi-manager',
+  template: `
+    <div class="wifi-manager">
+      <h2>WiFi Manager</h2>
+
+      <!-- Connection Status -->
+      <div class="status-section">
+        <h3>Connection Status</h3>
+        <p [class]="isConnected ? 'connected' : 'disconnected'">
+          {{ isConnected ? 'Connected' : 'Disconnected' }}
+        </p>
+
+        <div *ngIf="currentWifi" class="current-wifi">
+          <p><strong>Network:</strong> {{ currentWifi.ssid }}</p>
+          <p><strong>Signal:</strong> {{ currentWifi.level }} dBm</p>
+          <p><strong>BSSID:</strong> {{ currentWifi.bssid }}</p>
+        </div>
+      </div>
+
+      <!-- Scan Networks -->
+      <div class="scan-section">
+        <button (click)="scanNetworks()" [disabled]="loading">
+          {{ loading ? 'Scanning...' : 'Scan Networks' }}
+        </button>
+
+        <div *ngIf="networks.length > 0" class="networks-list">
+          <h3>Available Networks</h3>
+          <div *ngFor="let network of networks" class="network-item">
+            <span>{{ network.ssid }}</span>
+            <span>{{ network.level }} dBm</span>
+            <button (click)="connectToNetwork(network.ssid)">Connect</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection History -->
+      <div class="history-section" *ngIf="connectionHistory.length > 0">
+        <h3>Connection History</h3>
+        <ul>
+          <li *ngFor="let event of connectionHistory">
+            {{ formatTimestamp(event.timestamp) }}:
+            {{ event.isConnected ? 'Connected to ' + event.wifi?.ssid : 'Disconnected' }}
+          </li>
+        </ul>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .wifi-manager { padding: 20px; }
+    .connected { color: green; font-weight: bold; }
+    .disconnected { color: red; font-weight: bold; }
+    .network-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid #ccc;
+      margin: 4px 0;
+    }
+    .current-wifi {
+      background: #f0f0f0;
+      padding: 10px;
+      margin: 10px 0;
+    }
+  `]
+})
+export class WifiManagerComponent implements OnInit, OnDestroy {
+  isConnected = false;
+  currentWifi: any = null;
+  networks: any[] = [];
+  loading = false;
+  connectionHistory: any[] = [];
+
+  private wifiListener?: PluginListenerHandle;
+
+  constructor() {}
+
+  async ngOnInit() {
+    await this.initializeWifiMonitoring();
+    await this.getCurrentWifiStatus();
+  }
+
+  ngOnDestroy() {
+    this.cleanup();
+  }
+
+  private async initializeWifiMonitoring() {
+    try {
+      // Check permissions first
+      const permissions = await Wifi.checkPermissions();
+      if (permissions.LOCATION !== 'granted' || permissions.NETWORK !== 'granted') {
+        const result = await Wifi.requestPermissions();
+        if (result.LOCATION !== 'granted' || result.NETWORK !== 'granted') {
+          console.error('WiFi permissions not granted');
+          return;
+        }
+      }
+
+      // Set up WiFi connection monitoring
+      this.wifiListener = await Wifi.addListener('wifiConnectionChange', (event) => {
+        console.log('WiFi connection changed:', event);
+
+        // Update component state
+        this.isConnected = event.isConnected;
+        this.currentWifi = event.wifi || null;
+
+        // Add to connection history
+        this.connectionHistory.unshift({
+          timestamp: event.timestamp,
+          isConnected: event.isConnected,
+          wifi: event.wifi
+        });
+
+        // Keep only last 10 entries
+        if (this.connectionHistory.length > 10) {
+          this.connectionHistory = this.connectionHistory.slice(0, 10);
+        }
+
+        // Handle the connection change
+        this.handleWifiConnectionChange(event);
+      });
+
+      console.log('WiFi monitoring initialized successfully');
+
+    } catch (error) {
+      console.error('Failed to initialize WiFi monitoring:', error);
+    }
+  }
+
+  private async getCurrentWifiStatus() {
+    try {
+      const result = await Wifi.getCurrentWifi();
+      this.isConnected = !!result.currentWifi;
+      this.currentWifi = result.currentWifi;
+    } catch (error) {
+      console.error('Failed to get current WiFi status:', error);
+    }
+  }
+
+  async scanNetworks() {
+    this.loading = true;
+    try {
+      const result = await Wifi.scanWifi();
+      this.networks = result.wifis;
+      console.log('Found networks:', this.networks.length);
+    } catch (error) {
+      console.error('Failed to scan networks:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async connectToNetwork(ssid: string) {
+    // In a real app, you'd get the password from user input
+    const password = prompt(`Enter password for ${ssid}:`);
+    if (!password) return;
+
+    this.loading = true;
+    try {
+      const result = await Wifi.connectToWifiBySsidAndPassword({
+        ssid,
+        password
+      });
+
+      if (result.wasSuccess) {
+        console.log('Connected successfully to:', ssid);
+        // Update current WiFi info
+        await this.getCurrentWifiStatus();
+      }
+    } catch (error) {
+      console.error('Failed to connect to network:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private handleWifiConnectionChange(event: any) {
+    if (event.isConnected && event.wifi) {
+      console.log(`Connected to WiFi: ${event.wifi.ssid}`);
+      // Handle WiFi connected state
+      // e.g., enable certain features, sync data, etc.
+    } else {
+      console.log('WiFi disconnected');
+      // Handle WiFi disconnected state
+      // e.g., show offline mode, disable certain features
+    }
+  }
+
+  formatTimestamp(timestamp: number): string {
+    return new Date(timestamp).toLocaleTimeString();
+  }
+
+  private async cleanup() {
+    if (this.wifiListener) {
+      try {
+        await this.wifiListener.remove();
+        console.log('WiFi listener removed successfully');
+      } catch (error) {
+        console.error('Error removing WiFi listener:', error);
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Angular Service Example</strong></summary>
+
+### Angular Service Example
+
+For better separation of concerns, create a dedicated WiFi service:
+
+```typescript
+import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { Wifi } from '@tolutronics/capacitor-wifi';
+import { PluginListenerHandle } from '@capacitor/core';
+
+export interface WifiState {
+  isConnected: boolean;
+  currentWifi: any | null;
+  networks: any[];
+  loading: boolean;
+  connectionHistory: any[];
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class WifiService {
+  private wifiStateSubject = new BehaviorSubject<WifiState>({
+    isConnected: false,
+    currentWifi: null,
+    networks: [],
+    loading: false,
+    connectionHistory: []
+  });
+
+  private wifiListener?: PluginListenerHandle;
+  private isInitialized = false;
+
+  constructor() {
+    this.initialize();
+  }
+
+  get wifiState$(): Observable<WifiState> {
+    return this.wifiStateSubject.asObservable();
+  }
+
+  get currentState(): WifiState {
+    return this.wifiStateSubject.value;
+  }
+
+  private async initialize() {
+    if (this.isInitialized) return;
+
+    try {
+      // Check and request permissions
+      const permissions = await Wifi.checkPermissions();
+      if (permissions.LOCATION !== 'granted' || permissions.NETWORK !== 'granted') {
+        await Wifi.requestPermissions();
+      }
+
+      // Get initial WiFi state
+      await this.refreshCurrentWifi();
+
+      // Set up event listener
+      this.wifiListener = await Wifi.addListener('wifiConnectionChange', (event) => {
+        this.handleWifiConnectionChange(event);
+      });
+
+      this.isInitialized = true;
+      console.log('WiFi service initialized');
+
+    } catch (error) {
+      console.error('WiFi service initialization failed:', error);
+    }
+  }
+
+  private handleWifiConnectionChange(event: any) {
+    const currentState = this.currentState;
+
+    // Update connection history
+    const newHistory = [event, ...currentState.connectionHistory.slice(0, 9)];
+
+    // Update state
+    this.wifiStateSubject.next({
+      ...currentState,
+      isConnected: event.isConnected,
+      currentWifi: event.wifi || null,
+      connectionHistory: newHistory
+    });
+
+    console.log('WiFi state updated:', {
+      isConnected: event.isConnected,
+      ssid: event.wifi?.ssid
+    });
+  }
+
+  async refreshCurrentWifi(): Promise<void> {
+    try {
+      const result = await Wifi.getCurrentWifi();
+      const currentState = this.currentState;
+
+      this.wifiStateSubject.next({
+        ...currentState,
+        isConnected: !!result.currentWifi,
+        currentWifi: result.currentWifi
+      });
+    } catch (error) {
+      console.error('Failed to refresh current WiFi:', error);
+    }
+  }
+
+  async scanNetworks(): Promise<void> {
+    const currentState = this.currentState;
+
+    // Set loading state
+    this.wifiStateSubject.next({
+      ...currentState,
+      loading: true
+    });
+
+    try {
+      const result = await Wifi.scanWifi();
+
+      this.wifiStateSubject.next({
+        ...this.currentState,
+        networks: result.wifis,
+        loading: false
+      });
+    } catch (error) {
+      console.error('Failed to scan networks:', error);
+
+      this.wifiStateSubject.next({
+        ...this.currentState,
+        loading: false
+      });
+    }
+  }
+
+  async connectToNetwork(ssid: string, password: string): Promise<boolean> {
+    const currentState = this.currentState;
+
+    // Set loading state
+    this.wifiStateSubject.next({
+      ...currentState,
+      loading: true
+    });
+
+    try {
+      const result = await Wifi.connectToWifiBySsidAndPassword({
+        ssid,
+        password
+      });
+
+      if (result.wasSuccess) {
+        await this.refreshCurrentWifi();
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Failed to connect to network:', error);
+      return false;
+    } finally {
+      this.wifiStateSubject.next({
+        ...this.currentState,
+        loading: false
+      });
+    }
+  }
+
+  async connectToIoTDevice(devicePrefix: string, password: string): Promise<boolean> {
+    const currentState = this.currentState;
+
+    this.wifiStateSubject.next({
+      ...currentState,
+      loading: true
+    });
+
+    try {
+      const result = await Wifi.connectToWifiBySsidPrefixAndPassword({
+        ssidPrefix: devicePrefix,
+        password
+      });
+
+      if (result.wasSuccess) {
+        await this.refreshCurrentWifi();
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Failed to connect to IoT device:', error);
+      return false;
+    } finally {
+      this.wifiStateSubject.next({
+        ...this.currentState,
+        loading: false
+      });
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    try {
+      await Wifi.disconnectAndForget();
+      await this.refreshCurrentWifi();
+    } catch (error) {
+      console.error('Failed to disconnect:', error);
+    }
+  }
+
+  destroy(): void {
+    if (this.wifiListener) {
+      this.wifiListener.remove();
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Usage in Your HomePage</strong></summary>
+
+### Usage in Your HomePage
+
+Now you can simplify your HomePage component:
+
+```typescript
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { WifiService, WifiState } from './wifi.service';
+import { Observable } from 'rxjs';
+
+@Component({
+  selector: 'app-home',
+  template: `
+    <div class="home-page">
+      <h1>GPS Tracker</h1>
+
+      <!-- WiFi Status Card -->
+      <div class="wifi-status" *ngIf="wifiState$ | async as wifiState">
+        <h3>WiFi Status</h3>
+        <p [class]="wifiState.isConnected ? 'connected' : 'disconnected'">
+          {{ wifiState.isConnected ? 'Connected' : 'Disconnected' }}
+        </p>
+
+        <div *ngIf="wifiState.currentWifi" class="current-network">
+          <p><strong>{{ wifiState.currentWifi.ssid }}</strong></p>
+          <p>Signal: {{ wifiState.currentWifi.level }} dBm</p>
+        </div>
+
+        <button (click)="scanNetworks()" [disabled]="wifiState.loading">
+          {{ wifiState.loading ? 'Scanning...' : 'Scan Networks' }}
+        </button>
+      </div>
+
+      <!-- Your other tracking UI here -->
+      <div class="tracking-controls">
+        <button (click)="toggleTracking()">
+          {{ isTracking ? 'Stop Tracking' : 'Start Tracking' }}
+        </button>
+      </div>
+    </div>
+  `
+})
+export class HomePage implements OnInit, OnDestroy {
+  public isTracking = false;
+  public wifiState$: Observable<WifiState>;
+
+  constructor(private wifiService: WifiService) {
+    this.wifiState$ = this.wifiService.wifiState$;
+  }
+
+  ngOnInit() {
+    // WiFi monitoring is automatically initialized by the service
+  }
+
+  ngOnDestroy() {
+    // Service cleanup is handled globally, but you can call it here if needed
+    // this.wifiService.destroy();
+  }
+
+  async scanNetworks() {
+    await this.wifiService.scanNetworks();
+  }
+
+  toggleTracking() {
+    this.isTracking = !this.isTracking;
+    // Your tracking logic here
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>React/Vue Component Example</strong></summary>
+
 ### React/Vue Component Example
 
 ```typescript
@@ -499,6 +1052,8 @@ export const useWifi = () => {
   };
 };
 ```
+
+</details>
 
 ## API
 
