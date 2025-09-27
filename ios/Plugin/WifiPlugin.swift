@@ -3,6 +3,7 @@ import Capacitor
 import SystemConfiguration.CaptiveNetwork
 import CoreLocation
 import NetworkExtension
+import Network
 
 struct WifiEntry {
     var bssid: String
@@ -23,6 +24,20 @@ public class WifiPlugin: CAPPlugin, CLLocationManagerDelegate {
     var _locationManager: CLLocationManager = CLLocationManager()
 
     private let wifi = Wifi()
+    private var pathMonitor: NWPathMonitor?
+    private let monitorQueue = DispatchQueue(label: "WiFiMonitor")
+    private var isMonitoringStarted = false
+    private var lastConnectionState: Bool = false
+    private var lastWifiEntry: WifiEntry?
+
+    override public func load() {
+        super.load()
+        startWifiMonitoring()
+    }
+
+    deinit {
+        stopWifiMonitoring()
+    }
 
     public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         var locationState = "granted"
@@ -197,5 +212,67 @@ public class WifiPlugin: CAPPlugin, CLLocationManagerDelegate {
 
     @objc public func disconnectAndForget(_ call: CAPPluginCall) {
         call.resolve()
+    }
+
+    // MARK: - WiFi Connection Monitoring
+
+    private func startWifiMonitoring() {
+        guard !isMonitoringStarted else { return }
+
+        pathMonitor = NWPathMonitor(requiredInterfaceType: .wifi)
+        pathMonitor?.pathUpdateHandler = { [weak self] path in
+            self?.handleNetworkPathUpdate(path: path)
+        }
+        pathMonitor?.start(queue: monitorQueue)
+        isMonitoringStarted = true
+
+        // Initialize with current state
+        let currentWifi = getCurrentWifiInfo()
+        lastWifiEntry = currentWifi
+        lastConnectionState = currentWifi != nil
+    }
+
+    private func stopWifiMonitoring() {
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        isMonitoringStarted = false
+    }
+
+    private func handleNetworkPathUpdate(path: NWPath) {
+        let isConnected = path.status == .satisfied && path.usesInterfaceType(.wifi)
+        let currentWifi = getCurrentWifiInfo()
+
+        // Check if connection state changed or WiFi network changed
+        let connectionStateChanged = isConnected != lastConnectionState
+        let wifiNetworkChanged = !areWifiEntriesEqual(currentWifi, lastWifiEntry)
+
+        if connectionStateChanged || wifiNetworkChanged {
+            lastConnectionState = isConnected
+            lastWifiEntry = currentWifi
+
+            DispatchQueue.main.async { [weak self] in
+                self?.notifyWifiConnectionChange(isConnected: isConnected, wifi: currentWifi)
+            }
+        }
+    }
+
+    private func areWifiEntriesEqual(_ first: WifiEntry?, _ second: WifiEntry?) -> Bool {
+        guard let first = first, let second = second else {
+            return first == nil && second == nil
+        }
+        return first.ssid == second.ssid && first.bssid == second.bssid
+    }
+
+    private func notifyWifiConnectionChange(isConnected: Bool, wifi: WifiEntry?) {
+        var data: [String: Any] = [
+            "isConnected": isConnected,
+            "timestamp": Int(Date().timeIntervalSince1970 * 1000)
+        ]
+
+        if let wifiEntry = wifi {
+            data["wifi"] = wifiEntryToWifiDict(wifiEntry: wifiEntry)
+        }
+
+        notifyListeners("wifiConnectionChange", data: data)
     }
 }

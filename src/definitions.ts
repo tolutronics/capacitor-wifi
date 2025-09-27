@@ -1,4 +1,4 @@
-import type { PermissionState } from '@capacitor/core';
+import type { PermissionState, PluginListenerHandle } from '@capacitor/core';
 
 export enum WifiCapability {
   WPA2_PSK_CCM = 'WPA2-PSK-CCM',
@@ -64,6 +64,16 @@ export interface PermissionStatus {
   NETWORK: PermissionState;
 }
 
+export interface WifiConnectionStateChangeEvent {
+  isConnected: boolean;
+  wifi?: WifiEntry;
+  timestamp: number;
+}
+
+export interface WifiConnectionListener {
+  (event: WifiConnectionStateChangeEvent): void;
+}
+
 export interface WifiPlugin {
   scanWifi(): Promise<ScanWifiResult>;
   getCurrentWifi(): Promise<GetCurrentWifiResult>;
@@ -78,4 +88,20 @@ export interface WifiPlugin {
   requestPermissions(): Promise<PermissionStatus>;
 
   disconnectAndForget(): Promise<void>;
+
+  /**
+   * Listen for WiFi connection state changes
+   * @param eventName The event name to listen for
+   * @param listenerFunc The function to call when the event occurs
+   * @returns A promise that resolves with a listener handle
+   */
+  addListener(
+    eventName: 'wifiConnectionChange',
+    listenerFunc: WifiConnectionListener,
+  ): Promise<PluginListenerHandle> & PluginListenerHandle;
+
+  /**
+   * Remove all listeners for this plugin
+   */
+  removeAllListeners(): Promise<void>;
 }

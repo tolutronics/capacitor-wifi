@@ -37,6 +37,13 @@ public class WifiPlugin extends Plugin {
     @Override
     public void load() {
         this.wifi = new Wifi(getContext());
+        startWifiMonitoring();
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        stopWifiMonitoring();
+        super.handleOnDestroy();
     }
 
     @PluginMethod
@@ -191,5 +198,38 @@ public class WifiPlugin extends Plugin {
         this.wifi.disconnectAndForget();
         result.put("wasSuccess", true);
         call.resolve(result);
+    }
+
+    // WiFi Connection Monitoring
+
+    private void startWifiMonitoring() {
+        if (this.wifi != null) {
+            this.wifi.startWifiConnectionMonitoring(
+                    new WifiConnectionStateCallback() {
+                        @Override
+                        public void onConnectionStateChanged(boolean isConnected, WifiEntry wifiEntry) {
+                            notifyWifiConnectionChange(isConnected, wifiEntry);
+                        }
+                    }
+                );
+        }
+    }
+
+    private void stopWifiMonitoring() {
+        if (this.wifi != null) {
+            this.wifi.stopWifiConnectionMonitoring();
+        }
+    }
+
+    private void notifyWifiConnectionChange(boolean isConnected, WifiEntry wifiEntry) {
+        JSObject data = new JSObject();
+        data.put("isConnected", isConnected);
+        data.put("timestamp", System.currentTimeMillis());
+
+        if (wifiEntry != null) {
+            data.put("wifi", wifiEntry.toCapacitorResult());
+        }
+
+        notifyListeners("wifiConnectionChange", data);
     }
 }

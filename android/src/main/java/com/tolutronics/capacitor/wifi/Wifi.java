@@ -31,9 +31,21 @@ public class Wifi {
 
     private ConnectivityManager connectivityManager = null;
     private ConnectivityManager.NetworkCallback connectivityCallback = null;
+    private ConnectivityManager.NetworkCallback monitoringCallback = null;
+    private WifiConnectionStateCallback connectionStateCallback = null;
+    private boolean lastConnectionState = false;
+    private WifiEntry lastWifiEntry = null;
 
     public Wifi(Context context) {
         this.context = context;
+        this.ensureWifiManager();
+        this.initializeConnectionState();
+    }
+
+    private void initializeConnectionState() {
+        WifiEntry currentWifi = getCurrentWifiCached();
+        this.lastConnectionState = currentWifi != null;
+        this.lastWifiEntry = currentWifi;
     }
 
     public void connectToWifiBySsid(String ssid, @Nullable String password, ConnectToWifiCallback connectedCallback) {
@@ -384,5 +396,79 @@ public class Wifi {
         }
 
         connectedCallback.onConnected(new WifiEntry());
+    }
+
+    // WiFi Connection Monitoring Methods
+
+    public void startWifiConnectionMonitoring(WifiConnectionStateCallback callback) {
+        this.connectionStateCallback = callback;
+
+        if (this.monitoringCallback != null) {
+            this.connectivityManager.unregisterNetworkCallback(this.monitoringCallback);
+        }
+
+        NetworkRequest.Builder builder = new NetworkRequest.Builder();
+        builder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
+
+        this.monitoringCallback =
+            new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(@NonNull Network network) {
+                    super.onAvailable(network);
+                    handleConnectionStateChange();
+                }
+
+                @Override
+                public void onLost(@NonNull Network network) {
+                    super.onLost(network);
+                    handleConnectionStateChange();
+                }
+
+                @Override
+                public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
+                    super.onCapabilitiesChanged(network, networkCapabilities);
+                    if (networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                        handleConnectionStateChange();
+                    }
+                }
+            };
+
+        this.connectivityManager.registerNetworkCallback(builder.build(), this.monitoringCallback);
+    }
+
+    public void stopWifiConnectionMonitoring() {
+        if (this.monitoringCallback != null) {
+            this.connectivityManager.unregisterNetworkCallback(this.monitoringCallback);
+            this.monitoringCallback = null;
+        }
+        this.connectionStateCallback = null;
+    }
+
+    private void handleConnectionStateChange() {
+        WifiEntry currentWifi = getCurrentWifiCached();
+        boolean isConnected = currentWifi != null;
+
+        // Check if connection state changed or WiFi network changed
+        boolean connectionStateChanged = isConnected != lastConnectionState;
+        boolean wifiNetworkChanged = !areWifiEntriesEqual(currentWifi, lastWifiEntry);
+
+        if (connectionStateChanged || wifiNetworkChanged) {
+            lastConnectionState = isConnected;
+            lastWifiEntry = currentWifi;
+
+            if (connectionStateCallback != null) {
+                connectionStateCallback.onConnectionStateChanged(isConnected, currentWifi);
+            }
+        }
+    }
+
+    private boolean areWifiEntriesEqual(WifiEntry first, WifiEntry second) {
+        if (first == null && second == null) {
+            return true;
+        }
+        if (first == null || second == null) {
+            return false;
+        }
+        return Objects.equals(first.ssid, second.ssid) && Objects.equals(first.bssid, second.bssid);
     }
 }
